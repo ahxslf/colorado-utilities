@@ -717,22 +717,38 @@ class VerifyView(discord.ui.View):
 
 TICKET_COUNTER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ticket_counter.json")
 TICKETS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tickets.json")
-ticket_counters: dict[str, int] = {}
+ticket_counters: dict[str, int] = {}  # now stores {"global": int, "per_user": {...}} for migration
 tickets_data: dict[str, dict] = {}
+GLOBAL_TICKET_COUNTER = 0
 
 def _load_ticket_counters():
+    global GLOBAL_TICKET_COUNTER
     try:
         with open(TICKET_COUNTER_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
             if isinstance(data, dict):
-                ticket_counters.update({str(k): int(v) for k, v in data.items()})
+                # New format: {"global": 123}
+                if "global" in data:
+                    GLOBAL_TICKET_COUNTER = int(data.get("global", 0))
+                    ticket_counters.update(data)
+                else:
+                    # Old per-user format: migrate to global = max values
+                    ticket_counters.update({str(k): int(v) for k, v in data.items()})
+                    if ticket_counters:
+                        GLOBAL_TICKET_COUNTER = max(ticket_counters.values())
+                    ticket_counters.clear()
+                    ticket_counters["global"] = GLOBAL_TICKET_COUNTER
+                    _save_ticket_counters()
+            elif isinstance(data, int):
+                GLOBAL_TICKET_COUNTER = data
     except (OSError, ValueError):
         pass
 
 def _save_ticket_counters():
     try:
         with open(TICKET_COUNTER_FILE, "w", encoding="utf-8") as f:
-            json.dump(ticket_counters, f, indent=2)
+            # Save global counter
+            json.dump({"global": GLOBAL_TICKET_COUNTER}, f, indent=2)
     except OSError as e:
         print(f"[!] ticket counter save fail: {e}")
 
@@ -756,17 +772,27 @@ _load_ticket_counters()
 _load_tickets()
 
 def get_next_ticket_number(user_id: int) -> int:
-    uid = str(user_id)
-    current = ticket_counters.get(uid, 0) + 1
-    ticket_counters[uid] = current
+    """Global incremental: user1-0001, user2-0002, user3-0003 ..."""
+    global GLOBAL_TICKET_COUNTER
+    GLOBAL_TICKET_COUNTER += 1
     _save_ticket_counters()
-    return current
+    # Also keep per-user for stats if needed
+    uid = str(user_id)
+    ticket_counters[uid] = ticket_counters.get(uid, 0) + 1
+    return GLOBAL_TICKET_COUNTER
 
 def sanitize_username(name: str) -> str:
     name = name.lower()
     name = re.sub(r'[^a-z0-9-]', '-', name)
     name = re.sub(r'-+', '-', name).strip('-')
     return name[:20] or "user"
+
+def get_user_open_tickets(user_id: int) -> int:
+    count = 0
+    for data in tickets_data.values():
+        if data.get("opener_id") == user_id:
+            count += 1
+    return count
 
 def get_ticket_roles(guild: discord.Guild, category_key: str) -> list[discord.Role]:
     cat = TICKET_CATEGORIES.get(category_key)
@@ -795,6 +821,10 @@ async def create_ticket_channel(guild: discord.Guild, opener: discord.Member, ca
     if not cat_config:
         return None
 
+    # Anti-spam: max 3 open tickets per user
+    if get_user_open_tickets(opener.id) >= 3:
+        return None
+
     number = get_next_ticket_number(opener.id)
     channel_name = f"{sanitize_username(opener.name)}-{number:04d}"
 
@@ -818,7 +848,7 @@ async def create_ticket_channel(guild: discord.Guild, opener: discord.Member, ca
             category=ticket_category,
             overwrites=overwrites,
             reason=f"Ticket {category_key} opened by {opener} ({opener.id})",
-            topic=f"Ticket | {cat_config['label']} | Opened by {opener} | {modal_data}"
+            topic=f"Ticket | {cat_config['label']} | Opened by {opener} | #{number:04d}"
         )
     except Exception as e:
         print(f"[!] Ticket channel creation fail: {e}")
@@ -835,59 +865,77 @@ async def create_ticket_channel(guild: discord.Guild, opener: discord.Member, ca
     }
     _save_tickets()
 
-    # Welcome message per category
     welcome_text = cat_config["welcome"].format(user=opener.mention)
-    
-    # Build embed for ticket
-    embed = discord.Embed(
-        color=EMBED_COLOR,
-        title=f"{cat_config['emoji']} {cat_config['label']}",
-        description=welcome_text
-    )
-    if modal_data:
-        # Add modal data as fields
-        details = "\n".join([f"**{k}:** {v}" for k, v in modal_data.items() if v])
-        if details:
-            embed.add_field(name="Ticket Details", value=details[:1024], inline=False)
-    embed.set_footer(text=f"Ticket: {channel_name} | Category: {cat_config['label']}")
-
-    # Ping staff role (same for all per request)
     ping_role = guild.get_role(TICKET_STAFF_PING_ROLE_ID)
     content = f"{opener.mention} {ping_role.mention if ping_role else ''}".strip()
 
     try:
-        # Send with banners and control buttons
-        view = TicketControlView()
-        # First send welcome with banners using LayoutView? For simplicity, send embed + banners as separate?
-        # We'll send a LayoutView similar to ticket panel but for welcome
-        # To keep simple, send embed + control view, then banners as followup? Actually we want banners in same message
-        # We'll create a LayoutView for ticket welcome
-        welcome_view = TicketWelcomeLayout(welcome_text, cat_config["label"], cat_config["emoji"])
+        # Advanced welcome with details
+        welcome_view = TicketWelcomeLayout(welcome_text, cat_config["label"], cat_config["emoji"], modal_data, channel_name, number)
         await channel.send(content=content, view=welcome_view, allowed_mentions=discord.AllowedMentions(everyone=False, roles=True, users=True))
-        # Also send control buttons as second message
-        await channel.send(view=view)
+        # Control buttons in same view? Send as second message for clarity, but single row
+        await channel.send(view=TicketControlView())
     except Exception as e:
         print(f"[!] Ticket welcome send fail: {e}")
         try:
-            await channel.send(content=content, embed=embed, view=TicketControlView())
+            embed = discord.Embed(color=EMBED_COLOR, title=f"{cat_config['emoji']} {cat_config['label']}", description=welcome_text)
+            if modal_data:
+                details = "\n".join([f"**{k}:** {v}" for k, v in modal_data.items() if v])
+                if details:
+                    embed.add_field(name="Ticket Details", value=details[:1024], inline=False)
+            embed.set_footer(text=f"Ticket: {channel_name} | #{number:04d} | {cat_config['label']}")
+            await channel.send(content=content, embed=embed, view=TicketControlView(), allowed_mentions=discord.AllowedMentions(everyone=False, roles=True, users=True))
         except Exception as e2:
             print(f"[!] Fallback welcome fail: {e2}")
 
     return channel
 
 class TicketWelcomeLayout(discord.ui.LayoutView):
-    def __init__(self, welcome_text: str, category_label: str, emoji: str):
+    def __init__(self, welcome_text: str, category_label: str, emoji: str, modal_data: dict | None = None, channel_name: str = "", ticket_number: int = 0):
         super().__init__(timeout=None)
-        container = discord.ui.Container(
+        details_text = ""
+        if modal_data:
+            lines = []
+            for k, v in modal_data.items():
+                if v:
+                    # Escape > to avoid breaking quote
+                    safe_v = str(v)[:500].replace("\n", " ")
+                    lines.append(f"**{k}:** {safe_v}")
+            if lines:
+                details_text = "\n".join(lines)
+
+        description_parts = [
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_TOP)),
-            discord.ui.TextDisplay(f"### {emoji} {category_label}\n{welcome_text}"),
+            discord.ui.TextDisplay(f"### {emoji} {category_label} - Ticket #{ticket_number:04d}\n{welcome_text}"),
+        ]
+        if details_text:
+            description_parts.append(discord.ui.Separator())
+            description_parts.append(discord.ui.TextDisplay(f"**Ticket Details:**\n{details_text}"))
+
+        description_parts.extend([
             discord.ui.Separator(),
-            discord.ui.TextDisplay(f"-# Ticket will be closed if no response. Please be patient."),
+            discord.ui.TextDisplay(f"-# Channel: `{channel_name}` | Use the buttons below to claim or close this ticket.\n-# Please do not ping staff, they will assist you soon."),
             discord.ui.Separator(),
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)),
-            accent_colour=discord.Colour(EMBED_COLOR),
-        )
+        ])
+
+        container = discord.ui.Container(*description_parts, accent_colour=discord.Colour(EMBED_COLOR))
         self.add_item(container)
+
+class TicketCloseReasonModal(discord.ui.Modal, title="Close Ticket"):
+    reason = discord.ui.TextInput(label="Reason for closing", style=discord.TextStyle.paragraph, required=False, max_length=500, placeholder="Optional reason...")
+    def __init__(self, channel: discord.TextChannel, closer: discord.Member):
+        super().__init__()
+        self.channel = channel
+        self.closer = closer
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        # Store reason in ticket data for transcript
+        data = tickets_data.get(str(self.channel.id))
+        if data:
+            data["close_reason"] = self.reason.value
+            _save_tickets()
+        await close_ticket(interaction, self.channel, self.closer, reason=self.reason.value)
 
 class TicketControlView(discord.ui.View):
     def __init__(self):
@@ -915,16 +963,35 @@ class TicketControlView(discord.ui.View):
             return
         data["claimed_by"] = interaction.user.id
         _save_tickets()
-        await interaction.response.send_message(f"✅ {interaction.user.mention} claimed this ticket!", ephemeral=False)
-        try:
-            await interaction.channel.send(f"🙋 {interaction.user.mention} will handle this ticket.")
-        except:
-            pass
+        # SINGLE MESSAGE ONLY - fixed double message issue
+        await interaction.response.send_message(f"🙋 {interaction.user.mention} claimed this ticket and will handle it!", ephemeral=False)
+
+    @discord.ui.button(label="Unclaim", style=discord.ButtonStyle.secondary, custom_id="ticket_unclaim", emoji="🙅")
+    async def unclaim_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        channel_id = str(interaction.channel_id)
+        data = tickets_data.get(channel_id)
+        if not data:
+            await interaction.response.send_message("❌ This is not a ticket channel.", ephemeral=True)
+            return
+        if not data.get("claimed_by"):
+            await interaction.response.send_message("❌ Ticket is not claimed.", ephemeral=True)
+            return
+        # Only claimer or higher management can unclaim
+        if data["claimed_by"] != interaction.user.id and not has_role_or_higher(interaction.user, TICKET_MANAGEMENT_ROLE_ID):
+            await interaction.response.send_message("❌ Only the claimer or Management can unclaim.", ephemeral=True)
+            return
+        data["claimed_by"] = None
+        _save_tickets()
+        await interaction.response.send_message(f"🙅 {interaction.user.mention} unclaimed this ticket.", ephemeral=False)
 
     @discord.ui.button(label="Close", style=discord.ButtonStyle.danger, custom_id="ticket_close", emoji="🔒")
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        await close_ticket(interaction, interaction.channel, interaction.user)
+        channel = interaction.channel
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message("❌ Not a ticket channel.", ephemeral=True)
+            return
+        # Show modal for close reason
+        await interaction.response.send_modal(TicketCloseReasonModal(channel, interaction.user))
 
 async def generate_transcript(channel: discord.TextChannel) -> io.BytesIO:
     transcript = []
@@ -937,30 +1004,42 @@ async def generate_transcript(channel: discord.TextChannel) -> io.BytesIO:
         timestamp = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
         author = f"{msg.author} ({msg.author.id})"
         content = msg.content or ""
-        # Include embeds
         embed_text = ""
         if msg.embeds:
             for emb in msg.embeds:
-                embed_text += f"\n[EMBED] {emb.title or ''} - {emb.description or ''}"
-        transcript.append(f"[{timestamp}] {author}: {content}{embed_text}")
+                title = emb.title or ""
+                desc = emb.description or ""
+                fields = ""
+                if emb.fields:
+                    fields = " | ".join([f"{f.name}: {f.value}" for f in emb.fields])
+                embed_text += f"\n[EMBED] {title} - {desc} {fields}"
+        # attachments
+        att_text = ""
+        if msg.attachments:
+            att_text = " [Attachments: " + ", ".join([a.url for a in msg.attachments]) + "]"
+        transcript.append(f"[{timestamp}] {author}: {content}{embed_text}{att_text}")
 
     text = "\n".join(transcript)
     return io.BytesIO(text.encode('utf-8'))
 
-async def close_ticket(interaction: discord.Interaction | None, channel: discord.abc.GuildChannel, closer: discord.Member):
+async def close_ticket(interaction: discord.Interaction | None, channel: discord.abc.GuildChannel, closer: discord.Member, reason: str | None = None):
     if not isinstance(channel, discord.TextChannel):
         if interaction:
-            await interaction.followup.send("❌ This is not a text channel.", ephemeral=True)
+            try:
+                await interaction.followup.send("❌ This is not a text channel.", ephemeral=True)
+            except:
+                pass
         return
 
     if str(channel.id) not in tickets_data and channel.category_id != TICKET_CATEGORY_ID:
-        # Still allow closing if in ticket category even if not in data
         if channel.category_id != TICKET_CATEGORY_ID:
             if interaction:
-                await interaction.followup.send("❌ This is not a ticket channel.", ephemeral=True)
+                try:
+                    await interaction.followup.send("❌ This is not a ticket channel.", ephemeral=True)
+                except:
+                    pass
             return
 
-    # Generate transcript
     transcript_file = None
     try:
         transcript_bytes = await generate_transcript(channel)
@@ -968,7 +1047,6 @@ async def close_ticket(interaction: discord.Interaction | None, channel: discord
     except Exception as e:
         print(f"[!] Transcript gen fail: {e}")
 
-    # Send to transcript channel
     transcript_channel = channel.guild.get_channel(TICKET_TRANSCRIPT_CHANNEL_ID)
     if transcript_channel and isinstance(transcript_channel, discord.TextChannel):
         try:
@@ -976,15 +1054,22 @@ async def close_ticket(interaction: discord.Interaction | None, channel: discord
             opener_id = data.get("opener_id")
             category = data.get("category", "unknown")
             claimed = data.get("claimed_by")
+            modal_data = data.get("modal_data", {})
             embed = discord.Embed(color=EMBED_COLOR, title="🔒 Ticket Closed", description=f"Ticket **{channel.name}** closed by {closer.mention}")
             embed.add_field(name="Opener", value=f"<@{opener_id}> ({opener_id})" if opener_id else "Unknown", inline=True)
             embed.add_field(name="Category", value=category, inline=True)
             embed.add_field(name="Claimed By", value=f"<@{claimed}>" if claimed else "Not claimed", inline=True)
             embed.add_field(name="Closed By", value=closer.mention, inline=True)
             embed.add_field(name="Channel", value=f"{channel.name} ({channel.id})", inline=True)
+            if reason:
+                embed.add_field(name="Close Reason", value=reason[:1024], inline=False)
+            if modal_data:
+                details = "\n".join([f"**{k}:** {v}" for k, v in modal_data.items() if v])
+                if details:
+                    embed.add_field(name="Original Details", value=details[:1024], inline=False)
             embed.timestamp = discord.utils.utcnow()
+            embed.set_footer(text=f"Ticket #{data.get('number', '???'):04d}" if data.get('number') else "Ticket")
             if transcript_file:
-                # Need to recreate file because it was consumed? Actually we have BytesIO, we need to reset
                 transcript_file.fp.seek(0)
                 await transcript_channel.send(embed=embed, file=transcript_file)
             else:
@@ -992,20 +1077,18 @@ async def close_ticket(interaction: discord.Interaction | None, channel: discord
         except Exception as e:
             print(f"[!] Transcript send fail: {e}")
 
-    # Remove from data
     tickets_data.pop(str(channel.id), None)
     _save_tickets()
 
     if interaction:
         try:
-            await interaction.followup.send(f"✅ Closing ticket {channel.name}...", ephemeral=True)
+            await interaction.followup.send(f"✅ Closing ticket {channel.name}... Transcript saved.", ephemeral=True)
         except:
             pass
 
-    # Delete channel after 3 seconds
     await asyncio.sleep(3)
     try:
-        await channel.delete(reason=f"Ticket closed by {closer} ({closer.id})")
+        await channel.delete(reason=f"Ticket closed by {closer} ({closer.id}) | Reason: {reason or 'No reason'}")
     except Exception as e:
         print(f"[!] Channel delete fail: {e}")
 
@@ -1015,6 +1098,9 @@ class GeneralSupportModal(discord.ui.Modal, title="General Support"):
     inquiry = discord.ui.TextInput(label="Inquiry", style=discord.TextStyle.paragraph, required=True, max_length=1000, placeholder="Describe your issue...")
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        if get_user_open_tickets(interaction.user.id) >= 3:
+            await interaction.followup.send("❌ You already have 3 open tickets. Please close one before opening another.", ephemeral=True)
+            return
         data = {"Inquiry": self.inquiry.value}
         guild = interaction.guild
         if not isinstance(guild, discord.Guild) or not isinstance(interaction.user, discord.Member):
@@ -1023,7 +1109,7 @@ class GeneralSupportModal(discord.ui.Modal, title="General Support"):
         if channel:
             await interaction.followup.send(f"✅ Ticket created: {channel.mention}", ephemeral=True)
         else:
-            await interaction.followup.send("❌ Failed to create ticket.", ephemeral=True)
+            await interaction.followup.send("❌ Failed to create ticket. You may have too many open tickets.", ephemeral=True)
 
 class PlayerReportModal(discord.ui.Modal, title="Player Report"):
     player = discord.ui.TextInput(label="Player", style=discord.TextStyle.short, required=True, max_length=100, placeholder="Username of player to report")
@@ -1034,6 +1120,9 @@ class PlayerReportModal(discord.ui.Modal, title="Player Report"):
             await interaction.response.send_message("Sorry, we can't moderate people without video proof. Thanks for understanding.", ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
+        if get_user_open_tickets(interaction.user.id) >= 3:
+            await interaction.followup.send("❌ You already have 3 open tickets.", ephemeral=True)
+            return
         data = {"Player": self.player.value, "Reason": self.reason.value, "Video Proof": self.video_proof.value}
         guild = interaction.guild
         if not isinstance(guild, discord.Guild) or not isinstance(interaction.user, discord.Member):
@@ -1049,6 +1138,9 @@ class InternalAffairsModal(discord.ui.Modal, title="Internal Affairs Support"):
     reason = discord.ui.TextInput(label="Reason", style=discord.TextStyle.paragraph, required=True, max_length=1000, placeholder="What did they do?")
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        if get_user_open_tickets(interaction.user.id) >= 3:
+            await interaction.followup.send("❌ You already have 3 open tickets.", ephemeral=True)
+            return
         data = {"Staff": self.staff.value, "Reason": self.reason.value}
         guild = interaction.guild
         if not isinstance(guild, discord.Guild) or not isinstance(interaction.user, discord.Member):
@@ -1063,6 +1155,9 @@ class ManagementModal(discord.ui.Modal, title="Management Ticket"):
     inquiry = discord.ui.TextInput(label="Inquiry", style=discord.TextStyle.paragraph, required=True, max_length=1000, placeholder="Partnerships, giveaways, events etc.")
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        if get_user_open_tickets(interaction.user.id) >= 3:
+            await interaction.followup.send("❌ You already have 3 open tickets.", ephemeral=True)
+            return
         data = {"Inquiry": self.inquiry.value}
         guild = interaction.guild
         if not isinstance(guild, discord.Guild) or not isinstance(interaction.user, discord.Member):
@@ -1077,6 +1172,9 @@ class FoundershipModal(discord.ui.Modal, title="Foundership Ticket"):
     inquiry = discord.ui.TextInput(label="Inquiry", style=discord.TextStyle.paragraph, required=True, max_length=1000, placeholder="Describe your serious issue...")
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
+        if get_user_open_tickets(interaction.user.id) >= 3:
+            await interaction.followup.send("❌ You already have 3 open tickets.", ephemeral=True)
+            return
         data = {"Inquiry": self.inquiry.value}
         guild = interaction.guild
         if not isinstance(guild, discord.Guild) or not isinstance(interaction.user, discord.Member):
@@ -1728,10 +1826,38 @@ async def claim_command(interaction: discord.Interaction):
         return
     data["claimed_by"] = member.id
     _save_tickets()
-    await interaction.response.send_message(f"✅ {member.mention} claimed this ticket!")
+    await interaction.response.send_message(f"🙋 {member.mention} claimed this ticket and will handle it!")
+
+@bot.tree.command(name="unclaim", description="Unclaim current ticket.")
+async def unclaim_command(interaction: discord.Interaction):
+    member = interaction.user
+    if not isinstance(member, discord.Member):
+        await interaction.response.send_message("❌ Only inside server.", ephemeral=True)
+        return
+    if not has_role_or_higher(member, TICKET_STAFF_PING_ROLE_ID):
+        await interaction.response.send_message("❌ You need staff role.", ephemeral=True)
+        return
+    channel = interaction.channel
+    if not isinstance(channel, discord.TextChannel) or channel.category_id != TICKET_CATEGORY_ID:
+        await interaction.response.send_message("❌ This is not a ticket channel.", ephemeral=True)
+        return
+    data = tickets_data.get(str(channel.id))
+    if not data:
+        await interaction.response.send_message("❌ Ticket data not found.", ephemeral=True)
+        return
+    if not data.get("claimed_by"):
+        await interaction.response.send_message("❌ Ticket is not claimed.", ephemeral=True)
+        return
+    if data["claimed_by"] != member.id and not has_role_or_higher(member, TICKET_MANAGEMENT_ROLE_ID):
+        await interaction.response.send_message("❌ Only claimer or Management can unclaim.", ephemeral=True)
+        return
+    data["claimed_by"] = None
+    _save_tickets()
+    await interaction.response.send_message(f"🙅 {member.mention} unclaimed this ticket.")
 
 @bot.tree.command(name="close", description="Close current ticket.")
-async def close_command(interaction: discord.Interaction):
+@app_commands.describe(reason="Reason for closing (optional)")
+async def close_command(interaction: discord.Interaction, reason: Optional[str] = None):
     member = interaction.user
     if not isinstance(member, discord.Member):
         await interaction.response.send_message("❌ Only inside server.", ephemeral=True)
@@ -1744,7 +1870,7 @@ async def close_command(interaction: discord.Interaction):
         await interaction.response.send_message("❌ This is not a ticket channel.", ephemeral=True)
         return
     await interaction.response.defer(ephemeral=True)
-    await close_ticket(interaction, channel, member)
+    await close_ticket(interaction, channel, member, reason=reason)
 
 @bot.tree.command(name="add", description="Add a user to current ticket.")
 @app_commands.describe(user="User to add")
