@@ -59,44 +59,45 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Guild ID — commands are synced to this guild INSTANTLY.
-GUILD_ID = 1537482464279269466
+GUILD_ID = 1428083974726746185
 
 STAFF_APPLICATION_URL = "https://chicago-rp-staff.onrender.com/"
 
 EMBED_COLOR = 2830663
 
 # ── Welcome system ──
-WELCOME_CHANNEL_ID = 1537482465671647274
+WELCOME_CHANNEL_ID = 1545499120733659176
 
 # ── Role IDs ──
-UNVERIFIED_ROLE_ID = 1543236742843211776
-VERIFIED_ROLE_ID = 1543236668981518457
+UNVERIFIED_ROLE_ID = 1545498816323526687
+VERIFIED_ROLE_ID = 1545498809730207750
 
 # ── Roleplay request system ──
-ROLEPLAY_CHANNEL_ID = 1538859105794523256      # Channel where the request is posted
-ROLEPLAY_PING_ROLE_ID = 1538860814772207696    # Role that gets pinged + has accept/deny permission
-RP_LOG_CHANNEL_ID = 1537739601895227442        # Channel where accept/deny results are announced
+ROLEPLAY_CHANNEL_ID = 1545499358303096872      # Channel where the request is posted
+ROLEPLAY_PING_ROLE_ID = 1545498622282563624    # Role that gets pinged + has accept/deny permission
+RP_LOG_CHANNEL_ID = 1545499135065727031        # Channel where accept/deny results are announced
 
 # ── Ghost ping system ──
 GHOST_PING_WINDOW_SECONDS = 30
 
 # ── Training request system ──
-TRAINING_ROLE_ID = 1537565975665442898
-TRAINING_CHANNEL_ID = 1538865843499307150
-TRAINING_VOICE_CHANNEL_ID = 1538653094642974720
-TRAINING_VOICE_LINK = "https://discord.com/channels/1537482464279269466/1538653094642974720"
-TRAINING_FALLBACK_LINK = "https://discord.com/channels/1537482464279269466/1538653225866231958"
+TRAINING_ROLE_ID = 1545498654373318747
+TRAINING_CHANNEL_ID = 1545499270122176637
+TRAINING_VOICE_CHANNEL_ID = 1545499284151992363
+TRAINING_VOICE_CHANNEL_ID_2 = 1545499289936199710
+TRAINING_VOICE_LINK = "https://discord.com/channels/1428083974726746185/1545499284151992363"
+TRAINING_FALLBACK_LINK = "https://discord.com/channels/1428083974726746185/1545499289936199710"
 
 # ── Anti-Raid system ──
-ANTI_RAID_CHANNEL_ID = 1538868470047842355
-ANTI_RAID_PING_ROLE_ID = 1537565912893366332
-QUARANTINE_ROLE_ID = 1538869176826069062
-QUARANTINE_ALLOWED_CHANNEL_IDS = {1538869297735008328, 1538869788984746025}
+ANTI_RAID_CHANNEL_ID = 1545499002152296468
+ANTI_RAID_PING_ROLE_ID = 1545498154760409130
+QUARANTINE_ROLE_ID = 1545498793192063087
+QUARANTINE_ALLOWED_CHANNEL_IDS = {1545499008867242085, 1545499015024746506}
 CHANNEL_DELETE_LIMIT = 5
 ROLE_DELETE_LIMIT = 5
 
 # ── Verification (Verify) system ──
-VERIFY_CHANNEL_ID = 1538911267744518174
+VERIFY_CHANNEL_ID = 1545498995650986098
 
 # ── Roblox verification (OAuth2) ──
 ROBLOX_CLIENT_ID = os.getenv("ROBLOX_CLIENT_ID", "")
@@ -110,13 +111,13 @@ CALLBACK_PORT = int(os.getenv("PORT") or os.getenv("ROBLOX_AUTH_PORT", "5309"))
 ROBLOX_VERIFY_REQUIRED = True
 
 # ── Staff management system ──
-MANAGEMENT_ROLE_ID = 1537580967735205978    # promote/infract/strike/terminate + revoke commands (or higher)
-LIST_ROLE_ID = 1537736143657898035          # viewing your own list (or higher)
-LIST_OTHERS_ROLE_ID = 1537574826791665664   # viewing someone else's list via the user parameter (or higher)
-PROMO_LOG_CHANNEL_ID = 1538663573285511290  # Promotion announcements
-INFR_LOG_CHANNEL_ID = 1538663520512639046   # Infraction / Strike / Termination announcements
-INFRACTION_ROLE_IDS = {1: 1540652218313605220, 2: 1540652419900514385, 3: 1540652479715475477}
-STRIKE_ROLE_IDS = {1: 1540652703204773918, 2: 1540652995027538000, 3: 1540653116205047889}
+MANAGEMENT_ROLE_ID = 1545498273731715103    # promote/infract/strike/terminate + revoke commands (or higher)
+LIST_ROLE_ID = 1545498622282563624          # viewing your own list (or higher)
+LIST_OTHERS_ROLE_ID = 1545498273731715103   # viewing someone else's list via the user parameter (or higher)
+PROMO_LOG_CHANNEL_ID = 1545499327642992700  # Promotion announcements
+INFR_LOG_CHANNEL_ID = 1545499321527697498   # Infraction / Strike / Termination announcements
+INFRACTION_ROLE_IDS = {1: 1545500595715051730, 2: 1545498761105641676, 3: 1545498766772273253}
+STRIKE_ROLE_IDS = {1: 1545498774619820162, 2: 1545498781242359910, 3: 1545498787118588055}
 
 # 1. Banner (at the top, above the heading)
 BANNER_TOP_URL = "https://media.discordapp.net/attachments/980177239373140008/1538162090798485504/Untitled_design_12.png?ex=6a81ac94&is=6a805b14&hm=dad6e9e41d7194b996f1584d84311ddefc3f92f27ac21fadaf991b9fd5e4767c&=&format=webp&quality=lossless"
@@ -450,6 +451,7 @@ class HostTrainingView(discord.ui.View):
 
         requester_id = self.get_requester_id(interaction)
         voice_channel = interaction.guild.get_channel(TRAINING_VOICE_CHANNEL_ID)
+        voice_channel_2 = interaction.guild.get_channel(TRAINING_VOICE_CHANNEL_ID_2) if 'TRAINING_VOICE_CHANNEL_ID_2' in globals() else None
         already_hosting = False
 
         if isinstance(voice_channel, discord.VoiceChannel):
