@@ -1202,7 +1202,7 @@ class TicketCategorySelect(discord.ui.Select):
             discord.SelectOption(label=cat["label"], description=cat["description"][:100], value=key, emoji=cat.get("emoji"))
             for key, cat in TICKET_CATEGORIES.items()
         ]
-        super().__init__(placeholder="Select a ticket category...", min_values=1, max_values=1, options=options, custom_id="ticket_category_select")
+        super().__init__(placeholder="💬 General Support", min_values=1, max_values=1, options=options, custom_id="ticket_category_select")
 
     async def callback(self, interaction: discord.Interaction):
         category = self.values[0]
@@ -1227,14 +1227,25 @@ class TicketPanelView(discord.ui.View):
 class TicketPanelLayout(discord.ui.LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
-        # En eski sade hali
+        # First image - exact old design
         container = discord.ui.Container(
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_TOP)),
             discord.ui.TextDisplay(
-                "## Colorado State Roleplay Tickets\n"
-                "> Select a category to open a ticket."
+                "## 🎫 Colorado State Roleplay Tickets\n"
+                "> Select a category below to open a ticket. Our staff team will assist you as soon as possible!"
             ),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(
+                "**Categories:**\n"
+                "💬 **General Support** - General questions and concerns about the server.\n"
+                "🚨 **Player Report** - Reporting a player for an action they did.\n"
+                "🕵️ **Internal Affairs Support** - Reporting a staff member.\n"
+                "👑 **Management Ticket** - Partnerships, giveaways, events etc.\n"
+                "🏛️ **Foundership Ticket** - Serious issues directed to foundership instantly."
+            ),
+            discord.ui.Separator(),
             discord.ui.ActionRow(TicketCategorySelect()),
+            discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)),
             accent_colour=discord.Colour(0x2B2D31),
         )
