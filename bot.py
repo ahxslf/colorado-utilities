@@ -899,33 +899,59 @@ async def create_ticket_channel(guild: discord.Guild, opener: discord.Member, ca
 class TicketWelcomeLayout(discord.ui.LayoutView):
     def __init__(self, welcome_text: str, category_label: str, emoji: str, modal_data: dict | None = None, channel_name: str = "", ticket_number: int = 0):
         super().__init__(timeout=None)
+        
         details_text = ""
         if modal_data:
             lines = []
             for k, v in modal_data.items():
                 if v:
-                    # Escape > to avoid breaking quote
-                    safe_v = str(v)[:500].replace("\n", " ")
-                    lines.append(f"**{k}:** {safe_v}")
+                    safe = str(v)[:800].replace("`", "'").replace("\n", " ")
+                    lines.append(f"**{k}:** {safe}")
             if lines:
                 details_text = "\n".join(lines)
 
-        description_parts = [
+        # ULTRA PREMIUM welcome - both banners, global ticket number
+        components = [
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_TOP)),
-            discord.ui.TextDisplay(f"### {emoji} {category_label} - Ticket #{ticket_number:04d}\n{welcome_text}"),
+            discord.ui.TextDisplay(
+                f"# {emoji} {category_label}\n"
+                f"## Ticket #{ticket_number:04d} — {channel_name}\n"
+                f"{welcome_text}\n"
+                f"\n"
+                f"-# 🎫 **Ticket ID:** `{ticket_number:04d}` • 📂 **Category:** {category_label} • 🕐 <t:{int(time.time())}:R>"
+            ),
         ]
-        if details_text:
-            description_parts.append(discord.ui.Separator())
-            description_parts.append(discord.ui.TextDisplay(f"**Ticket Details:**\n{details_text}"))
 
-        description_parts.extend([
-            discord.ui.Separator(),
-            discord.ui.TextDisplay(f"-# Channel: `{channel_name}` | Use the buttons below to claim or close this ticket.\n-# Please do not ping staff, they will assist you soon."),
+        if details_text:
+            components.append(discord.ui.Separator(spacing=discord.SeparatorSpacing.small))
+            components.append(
+                discord.ui.Container(
+                    discord.ui.TextDisplay(f"### 📝 Your Submission\n{details_text}"),
+                    accent_colour=discord.Colour(0x5865F2),
+                )
+            )
+
+        components.extend([
+            discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "### 📌 What happens next?\n"
+                    "> **1.** ⏳ A staff member will **claim** your ticket shortly\n"
+                    "> **2.** 📎 Please provide **additional details & proof** if available\n"
+                    "> **3.** 🔕 Do **not** ping staff — we will respond soon\n"
+                    "> **4.** 🔒 Use buttons below to manage ticket\n"
+                    ">\n"
+                    "> *Thank you for contacting Colorado State Roleplay Support!*"
+                ),
+                accessory=discord.ui.Thumbnail(media=TICKET_BANNER_BOTTOM),
+            ),
+            discord.ui.Separator(spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay("-# 💡 **Tip:** Stay in this channel — staff will assist you here. Closing ticket will save transcript automatically."),
             discord.ui.Separator(),
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)),
         ])
 
-        container = discord.ui.Container(*description_parts, accent_colour=discord.Colour(EMBED_COLOR))
+        container = discord.ui.Container(*components, accent_colour=discord.Colour(0x2B2D31))
         self.add_item(container)
 
 class TicketCloseReasonModal(discord.ui.Modal, title="Close Ticket"):
@@ -1224,23 +1250,58 @@ class TicketPanelView(discord.ui.View):
 class TicketPanelLayout(discord.ui.LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
+        # ULTRA PREMIUM ticket panel - Components V2
         container = discord.ui.Container(
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_TOP)),
-            discord.ui.TextDisplay("### 🎫 Colorado State Roleplay Tickets\n> Select a category below to open a ticket. Our staff team will assist you as soon as possible!"),
-            discord.ui.Separator(),
             discord.ui.TextDisplay(
-                "**Categories:**\n"
-                "💬 **General Support** - General questions and concerns about the server.\n"
-                "🚨 **Player Report** - Reporting a player for an action they did.\n"
-                "🕵️ **Internal Affairs Support** - Reporting a staff member.\n"
-                "👑 **Management Ticket** - Partnerships, giveaways, events etc.\n"
-                "🏛️ **Foundership Ticket** - Serious issues directed to foundership instantly."
+                "# 🎫 Colorado State Roleplay — Support Center\n"
+                "## Professional • Fast • Private\n"
+                "> Welcome to our **premium support system**. Our dedicated staff team is available **24/7** to assist you with any concerns.\n"
+                ">\n"
+                "> ⚡ **Average Response:** < 5 minutes | 🔒 **100% Private** | 🎧 **Expert Staff**"
+            ),
+            discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
+            discord.ui.Section(
+                discord.ui.TextDisplay(
+                    "### 📋 How can we help you?\n"
+                    "\n"
+                    "💬 **General Support**\n"
+                    "> General questions, help & server info\n"
+                    "\n"
+                    "🚨 **Player Report**\n"
+                    "> Report rule-breakers — *video proof required*\n"
+                    "\n"
+                    "🕵️ **Internal Affairs**\n"
+                    "> Report a staff member — confidential\n"
+                    "\n"
+                    "👑 **Management**\n"
+                    "> Partnerships, giveaways, events & more\n"
+                    "\n"
+                    "🏛️ **Foundership**\n"
+                    "> Critical issues — direct to founders"
+                ),
+                accessory=discord.ui.Thumbnail(media=TICKET_BANNER_BOTTOM),
+            ),
+            discord.ui.Separator(spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                "### ✨ How it works\n"
+                "> **1.** Select a category below\n"
+                "> **2.** Fill the short form\n"
+                "> **3.** Private channel will be created instantly\n"
+                "> **4.** Staff will claim & assist you"
             ),
             discord.ui.Separator(),
+            discord.ui.TextDisplay("## 📩 Open a Ticket\n> 👇 **Choose your category from the menu:**"),
             discord.ui.ActionRow(TicketCategorySelect()),
-            discord.ui.Separator(),
+            discord.ui.Separator(spacing=discord.SeparatorSpacing.small),
+            discord.ui.TextDisplay(
+                "-# 🔒 All tickets are private & secure\n"
+                "-# 📌 Please do not open multiple tickets for the same issue\n"
+                "-# ⚡ Abusing the ticket system will result in punishment"
+            ),
+            discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)),
-            accent_colour=discord.Colour(EMBED_COLOR),
+            accent_colour=discord.Colour(0x2B2D31),
         )
         self.add_item(container)
 
@@ -1432,6 +1493,13 @@ def _save_pending_bot_messages():
 
 _load_pending_bot_messages()
 
+BOT_ATTACHMENTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pending_attachments")
+os.makedirs(BOT_ATTACHMENTS_DIR, exist_ok=True)
+
+def _attachment_path(req_id: str, filename: str) -> str:
+    safe = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)[:100] or "file"
+    return os.path.join(BOT_ATTACHMENTS_DIR, f"{req_id}_{safe}")
+
 class BotMessageApprovalView(discord.ui.View):
     def __init__(self, req_id: str | None = None):
         super().__init__(timeout=None)
@@ -1481,9 +1549,24 @@ class BotMessageApprovalView(discord.ui.View):
             target_channel = interaction.client.get_channel(channel_id)
             if target_channel:
                 try:
-                    await target_channel.send(msg_text)
+                    files = []
+                    att_path = data.get("attachment_path")
+                    att_filename = data.get("attachment_filename") or "attachment"
+                    if att_path and os.path.exists(att_path):
+                        files.append(discord.File(att_path, filename=att_filename))
+                    if files:
+                        await target_channel.send(content=msg_text, files=files)
+                    else:
+                        await target_channel.send(msg_text)
                 except discord.HTTPException as exc:
                     print(f"[!] Could not send accepted bot message: {exc}")
+            # cleanup file after send (optional keep for log)
+            try:
+                att_path = data.get("attachment_path")
+                if att_path and os.path.exists(att_path):
+                    os.remove(att_path)
+            except Exception:
+                pass
             await interaction.followup.send(f"✅ Request `{req_id}` accepted and message sent.", ephemeral=True)
         else:
             await interaction.followup.send("❌ Request data not found.", ephemeral=True)
@@ -1512,6 +1595,13 @@ class BotMessageApprovalView(discord.ui.View):
                     await member.send(f"❌ Your bot message request (`{req_id}`) has been **denied**.")
                 except discord.HTTPException:
                     pass
+            # cleanup file
+            try:
+                att_path = data.get("attachment_path")
+                if att_path and os.path.exists(att_path):
+                    os.remove(att_path)
+            except Exception:
+                pass
             await interaction.followup.send(f"❌ Request `{req_id}` denied.", ephemeral=True)
         else:
             await interaction.followup.send("❌ Request data not found.", ephemeral=True)
@@ -1542,23 +1632,63 @@ class ColoradoBot(commands.Bot):
 
         bot_group = app_commands.Group(name="bot", description="Bot commands")
 
-        @bot_group.command(name="message", description="Send a message as the bot.")
-        @app_commands.describe(message="The message for the bot to send")
-        async def bot_message_command(interaction: discord.Interaction, message: str):
+        @bot_group.command(name="message", description="Send a message as the bot. (Supports optional file/image)")
+        @app_commands.describe(message="The message for the bot to send", attachment="Optional file/image to attach")
+        async def bot_message_command(interaction: discord.Interaction, message: str, attachment: Optional[discord.Attachment] = None):
             if not isinstance(interaction.user, discord.Member) or not has_role_or_higher(interaction.user, MANAGEMENT_ROLE_ID):
                 await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
                 return
             has_ping = message.find("@everyone") != -1 or message.find("@here") != -1 or bool(re.search(r"<@&(\d+)>", message))
+            # Handle attachment download if provided
+            attachment_path = None
+            attachment_filename = None
+            attachment_file_obj = None
+            if attachment is not None:
+                try:
+                    # defer early if we need to download large file
+                    # but we need interaction response later, so just read
+                    data_bytes = await attachment.read()
+                    # limit 25MB
+                    if len(data_bytes) > 25 * 1024 * 1024:
+                        await interaction.response.send_message("❌ Attachment too large (max 25MB).", ephemeral=True)
+                        return
+                    attachment_filename = attachment.filename
+                    # For ping case, save to disk for later approval
+                    # We'll generate req_id first if needed
+                except Exception as exc:
+                    await interaction.response.send_message(f"❌ Could not read attachment: `{exc}`", ephemeral=True)
+                    return
+
             if has_ping:
                 req_id = f"MSG-{''.join(random.choices(CODE_ALPHABET, k=6))}"
-                pending_bot_messages[req_id] = {"user_id": interaction.user.id, "channel_id": interaction.channel_id, "message": message, "status": "pending", "created_ts": int(time.time())}
+                pending_entry = {"user_id": interaction.user.id, "channel_id": interaction.channel_id, "message": message, "status": "pending", "created_ts": int(time.time())}
+                if attachment is not None:
+                    try:
+                        # re-read if not already (we already read above, need to save)
+                        # Use previously read bytes
+                        # Note: we already have data_bytes from above scope, need to re-capture
+                        # To avoid scope issue, read again safely
+                        b = await attachment.read()
+                        path = _attachment_path(req_id, attachment.filename)
+                        with open(path, "wb") as f:
+                            f.write(b)
+                        pending_entry["attachment_path"] = path
+                        pending_entry["attachment_filename"] = attachment.filename
+                        pending_entry["attachment_url"] = attachment.url
+                        pending_entry["attachment_size"] = len(b)
+                    except Exception as e:
+                        print(f"[!] Failed to save attachment for {req_id}: {e}")
+                pending_bot_messages[req_id] = pending_entry
                 _save_pending_bot_messages()
                 await interaction.response.send_message("Your message contains a ping. A request have been sent to the system. Your message will be sended if it gets accepted.", ephemeral=True)
                 anti_raid_channel = interaction.guild.get_channel(ANTI_RAID_CHANNEL_ID)
                 if anti_raid_channel:
                     embed = discord.Embed(title="⚠️ Bot Message Request", color=discord.Color.orange(), timestamp=discord.utils.utcnow())
                     embed.add_field(name="User", value=f"{interaction.user.mention} (`{interaction.user}` - ID: {interaction.user.id})", inline=False)
-                    embed.add_field(name="Message", value=message, inline=False)
+                    embed.add_field(name="Message", value=message[:1024] if message else "(no text)", inline=False)
+                    if attachment is not None:
+                        embed.add_field(name="Attachment", value=f"**{attachment.filename}** ({attachment.size/1024:.1f} KB)\n{attachment.url}", inline=False)
+                        embed.set_image(url=attachment.url) if attachment.content_type and attachment.content_type.startswith("image") else None
                     embed.add_field(name="Date", value=f"<t:{int(time.time())}:F>", inline=True)
                     embed.add_field(name="Request ID", value=f"`{req_id}`", inline=True)
                     embed.description = f"{interaction.user.mention} tried to send a bot message containing a ping!\nDo you accept?"
@@ -1569,7 +1699,13 @@ class ColoradoBot(commands.Bot):
             else:
                 await interaction.response.defer(ephemeral=True)
                 try:
-                    await interaction.channel.send(message)
+                    if attachment is not None:
+                        # need to download again for direct send
+                        b = await attachment.read()
+                        file_obj = discord.File(io.BytesIO(b), filename=attachment.filename)
+                        await interaction.channel.send(content=message, files=[file_obj] if message or file_obj else [])
+                    else:
+                        await interaction.channel.send(message)
                     await interaction.followup.send("✅ Message sent successfully.", ephemeral=True)
                 except Exception as exc:
                     await interaction.followup.send(f"❌ Could not send message: `{exc}`", ephemeral=True)
