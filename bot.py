@@ -795,6 +795,7 @@ def get_user_open_tickets(user_id: int) -> int:
     return count
 
 def get_ticket_roles(guild: discord.Guild, category_key: str) -> list[discord.Role]:
+    """Sadece gerekli rolleri döndür - 50 rol overwriti olmasın diye hierarchy eklemiyoruz"""
     cat = TICKET_CATEGORIES.get(category_key)
     if not cat:
         return []
@@ -808,12 +809,17 @@ def get_ticket_roles(guild: discord.Guild, category_key: str) -> list[discord.Ro
         target_id = cat.get("role_id")
         target_role = guild.get_role(target_id) if target_id else None
         if target_role:
-            if cat.get("hierarchical"):
-                for r in guild.roles:
-                    if r.position >= target_role.position:
-                        roles.append(r)
-            else:
-                roles.append(target_role)
+            # SADECE HEDEF ROL - üstü ekleme yok, 50 rol gözükmesin diye
+            roles.append(target_role)
+            # Management ve Foundership her ticketı görebilsin istiyorsan buraya ekle
+            # Ama sadece 1-2 rol olsun, 50 değil
+            # Foundership her zaman görebilsin (gizli)
+            for fid in TICKET_FOUNDERSHIP_ROLE_IDS:
+                fr = guild.get_role(fid)
+                if fr and fr not in roles:
+                    # Sadece foundership ticket değilse de ekleme yapma, sadece hedef rol
+                    # Bu kısmı kapattık - sadece hedef rol
+                    pass
     return roles
 
 async def create_ticket_channel(guild: discord.Guild, opener: discord.Member, category_key: str, modal_data: dict) -> discord.TextChannel | None:
