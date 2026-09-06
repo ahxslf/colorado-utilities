@@ -919,28 +919,14 @@ class TicketWelcomeLayout(discord.ui.LayoutView):
         ]
 
         if details_text:
-            components.append(discord.ui.Separator(spacing=discord.SeparatorSpacing.small))
             components.append(
                 discord.ui.Container(
-                    discord.ui.TextDisplay(f"**Details:**\n{details_text}"),
+                    discord.ui.TextDisplay(details_text),
                     accent_colour=discord.Colour(0x5865F2),
                 )
             )
 
-        components.extend([
-            discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
-            discord.ui.Section(
-                discord.ui.TextDisplay(
-                    "### What happens next?\n"
-                    "> 1. Staff will claim your ticket\n"
-                    "> 2. Provide details/proof if needed\n"
-                    "> 3. Please be patient, don't ping"
-                ),
-                accessory=discord.ui.Thumbnail(media=TICKET_BANNER_BOTTOM),
-            ),
-            discord.ui.Separator(),
-            discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)),
-        ])
+        components.append(discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)))
 
         container = discord.ui.Container(*components, accent_colour=discord.Colour(0x2B2D31))
         self.add_item(container)
@@ -1241,34 +1227,14 @@ class TicketPanelView(discord.ui.View):
 class TicketPanelLayout(discord.ui.LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
-        # Clean simple - eski güzel tasarım
+        # En eski sade hali
         container = discord.ui.Container(
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_TOP)),
             discord.ui.TextDisplay(
-                "## 🎫 Colorado State Roleplay — Support Center\n"
-                "> Select a category below to open a private ticket. Our staff will assist you shortly."
+                "## Colorado State Roleplay Tickets\n"
+                "> Select a category to open a ticket."
             ),
-            discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
-            discord.ui.Section(
-                discord.ui.TextDisplay(
-                    "💬 **General Support**\n"
-                    "> General questions and concerns\n\n"
-                    "🚨 **Player Report**\n"
-                    "> Reporting a player (video proof required)\n\n"
-                    "🕵️ **Internal Affairs**\n"
-                    "> Reporting a staff member\n\n"
-                    "👑 **Management**\n"
-                    "> Partnerships, giveaways, events\n\n"
-                    "🏛️ **Foundership**\n"
-                    "> Serious issues — direct to founders"
-                ),
-                accessory=discord.ui.Thumbnail(media=TICKET_BANNER_BOTTOM),
-            ),
-            discord.ui.Separator(),
-            discord.ui.TextDisplay("### 📩 Open a Ticket"),
             discord.ui.ActionRow(TicketCategorySelect()),
-            discord.ui.TextDisplay("-# 🔒 Private tickets • Don't open multiple tickets for same issue"),
-            discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)),
             accent_colour=discord.Colour(0x2B2D31),
         )
