@@ -910,15 +910,11 @@ class TicketWelcomeLayout(discord.ui.LayoutView):
             if lines:
                 details_text = "\n".join(lines)
 
-        # ULTRA PREMIUM welcome - both banners, global ticket number
         components = [
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_TOP)),
             discord.ui.TextDisplay(
-                f"# {emoji} {category_label}\n"
-                f"## Ticket #{ticket_number:04d} — {channel_name}\n"
-                f"{welcome_text}\n"
-                f"\n"
-                f"-# 🎫 **Ticket ID:** `{ticket_number:04d}` • 📂 **Category:** {category_label} • 🕐 <t:{int(time.time())}:R>"
+                f"## {emoji} {category_label} — Ticket #{ticket_number:04d}\n"
+                f"{welcome_text}"
             ),
         ]
 
@@ -926,7 +922,7 @@ class TicketWelcomeLayout(discord.ui.LayoutView):
             components.append(discord.ui.Separator(spacing=discord.SeparatorSpacing.small))
             components.append(
                 discord.ui.Container(
-                    discord.ui.TextDisplay(f"### 📝 Your Submission\n{details_text}"),
+                    discord.ui.TextDisplay(f"**Details:**\n{details_text}"),
                     accent_colour=discord.Colour(0x5865F2),
                 )
             )
@@ -935,18 +931,13 @@ class TicketWelcomeLayout(discord.ui.LayoutView):
             discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "### 📌 What happens next?\n"
-                    "> **1.** ⏳ A staff member will **claim** your ticket shortly\n"
-                    "> **2.** 📎 Please provide **additional details & proof** if available\n"
-                    "> **3.** 🔕 Do **not** ping staff — we will respond soon\n"
-                    "> **4.** 🔒 Use buttons below to manage ticket\n"
-                    ">\n"
-                    "> *Thank you for contacting Colorado State Roleplay Support!*"
+                    "### What happens next?\n"
+                    "> 1. Staff will claim your ticket\n"
+                    "> 2. Provide details/proof if needed\n"
+                    "> 3. Please be patient, don't ping"
                 ),
                 accessory=discord.ui.Thumbnail(media=TICKET_BANNER_BOTTOM),
             ),
-            discord.ui.Separator(spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay("-# 💡 **Tip:** Stay in this channel — staff will assist you here. Closing ticket will save transcript automatically."),
             discord.ui.Separator(),
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)),
         ])
@@ -1250,55 +1241,33 @@ class TicketPanelView(discord.ui.View):
 class TicketPanelLayout(discord.ui.LayoutView):
     def __init__(self):
         super().__init__(timeout=None)
-        # ULTRA PREMIUM ticket panel - Components V2
+        # Clean simple - eski güzel tasarım
         container = discord.ui.Container(
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_TOP)),
             discord.ui.TextDisplay(
-                "# 🎫 Colorado State Roleplay — Support Center\n"
-                "## Professional • Fast • Private\n"
-                "> Welcome to our **premium support system**. Our dedicated staff team is available **24/7** to assist you with any concerns.\n"
-                ">\n"
-                "> ⚡ **Average Response:** < 5 minutes | 🔒 **100% Private** | 🎧 **Expert Staff**"
+                "## 🎫 Colorado State Roleplay — Support Center\n"
+                "> Select a category below to open a private ticket. Our staff will assist you shortly."
             ),
             discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
             discord.ui.Section(
                 discord.ui.TextDisplay(
-                    "### 📋 How can we help you?\n"
-                    "\n"
                     "💬 **General Support**\n"
-                    "> General questions, help & server info\n"
-                    "\n"
+                    "> General questions and concerns\n\n"
                     "🚨 **Player Report**\n"
-                    "> Report rule-breakers — *video proof required*\n"
-                    "\n"
+                    "> Reporting a player (video proof required)\n\n"
                     "🕵️ **Internal Affairs**\n"
-                    "> Report a staff member — confidential\n"
-                    "\n"
+                    "> Reporting a staff member\n\n"
                     "👑 **Management**\n"
-                    "> Partnerships, giveaways, events & more\n"
-                    "\n"
+                    "> Partnerships, giveaways, events\n\n"
                     "🏛️ **Foundership**\n"
-                    "> Critical issues — direct to founders"
+                    "> Serious issues — direct to founders"
                 ),
                 accessory=discord.ui.Thumbnail(media=TICKET_BANNER_BOTTOM),
             ),
-            discord.ui.Separator(spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                "### ✨ How it works\n"
-                "> **1.** Select a category below\n"
-                "> **2.** Fill the short form\n"
-                "> **3.** Private channel will be created instantly\n"
-                "> **4.** Staff will claim & assist you"
-            ),
             discord.ui.Separator(),
-            discord.ui.TextDisplay("## 📩 Open a Ticket\n> 👇 **Choose your category from the menu:**"),
+            discord.ui.TextDisplay("### 📩 Open a Ticket"),
             discord.ui.ActionRow(TicketCategorySelect()),
-            discord.ui.Separator(spacing=discord.SeparatorSpacing.small),
-            discord.ui.TextDisplay(
-                "-# 🔒 All tickets are private & secure\n"
-                "-# 📌 Please do not open multiple tickets for the same issue\n"
-                "-# ⚡ Abusing the ticket system will result in punishment"
-            ),
+            discord.ui.TextDisplay("-# 🔒 Private tickets • Don't open multiple tickets for same issue"),
             discord.ui.Separator(spacing=discord.SeparatorSpacing.large),
             discord.ui.MediaGallery(discord.MediaGalleryItem(media=TICKET_BANNER_BOTTOM)),
             accent_colour=discord.Colour(0x2B2D31),
